@@ -13,15 +13,16 @@
 
 # import libraries
 print("Importing Libraries")
-import requests
-import urllib
-from bs4 import BeautifulSoup
-import re
-import pandas as pd
-import os
 import math
+import os
+import re
 import string
+import urllib
+
+import pandas as pd
+import requests
 import xlsxwriter
+from bs4 import BeautifulSoup
 
 ##########
 
