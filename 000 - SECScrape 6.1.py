@@ -796,7 +796,8 @@ def main():
     # The SEC daily index files are requested through the SEC master data navigator
     year_links = get_year_links(year, base_url)
 
-    # Find 'master' files for each year
+    # Find 'master' files for each year. SEC provides three types of .idx files, sorted by 'Company', 'form types' and 'CIK number'.
+    # The 'master file for each year sorts by CIK number and is the only file which has any sort of delimiter, allowing us to parse it.
     # A single variable of master_dictionary is created, which is a dictionary of every filing for each company for a year
     master_dictionary = get_master_files(year_links)
 
