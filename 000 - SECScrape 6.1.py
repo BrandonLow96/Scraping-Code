@@ -119,14 +119,10 @@ def get_master_files(year_links):
         with open(file_name, "rb") as f:
             byte_data = f.read()
 
-        # Byte steam decoded
-        data = byte_data.decode("utf-8").split("  ")
+        # Byte steam decoded, split by '--' which is the header and the rest of the data (the useful data)
+        data = byte_data.decode("utf-8").split("--")
 
-        for index, item in enumerate(data):
-            if "ftp://ftp.sec.gov/edgar/" in item:
-                start_ind = index
-
-        data_format = data[start_ind + 1 :]
+        data_format = data[-1]
 
         #############################
         # This section cleans the master file
@@ -134,26 +130,20 @@ def get_master_files(year_links):
 
         master_data = []
 
-        for index, item in enumerate(data_format):
+        clean_item_data = data_format.replace('\n','|').split('|')
 
-            # The first item must be specifically indexed based on the SEC website structure
-            if index == 0:
-                clean_item_data = item.replace("\n", "|").split("|")
-                clean_item_data = clean_item_data[8:]
-            else:
-                clean_item_data = item.replace("\n", "|").split("|")
+        # Loop through the data list
+        for index, row in enumerate(clean_item_data):
 
-            for index, row in enumerate(clean_item_data):
+            # Loop for when the next txt file is found
+            if ".txt" in row:
 
-                # Loop for when the next txt file is found
-                if ".txt" in row:
+                # Values for the row retrieved, and indexed specifically to a standard SEC format
+                mini_list = clean_item_data[(index - 4) : index + 1]
 
-                    # Values for the row retrieved, and indexed specifically to a standard SEC format
-                    mini_list = clean_item_data[(index - 4) : index + 1]
-
-                    if len(mini_list) != 0:
-                        mini_list[4] = "https://www.sec.gov/Archives/" + mini_list[4]
-                        master_data.append(mini_list)
+                if len(mini_list) != 0:
+                    mini_list[4] = "https://www.sec.gov/Archives/" + mini_list[4]
+                    master_data.append(mini_list)
 
         ########
 
