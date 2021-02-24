@@ -130,7 +130,7 @@ def get_master_files(year_links):
 
         master_data = []
 
-        clean_item_data = data_format.replace('\n','|').split('|')
+        clean_item_data = data_format.replace("\n", "|").split("|")
 
         # Loop through the data list
         for index, row in enumerate(clean_item_data):
@@ -178,8 +178,8 @@ def get_master_files(year_links):
 def retrieve_filings(master_dictionary):
     master_file_urls = []
 
-    # Inistialise the master dataframe
-    ComFiles = pd.DataFrame(
+    # Initialise the master dataframe
+    com_files = pd.DataFrame(
         {"Name": [], "CIK": [], "10Ks": [], "KDates": [], "10Qs": [], "QDates": []}
     )
 
@@ -189,8 +189,8 @@ def retrieve_filings(master_dictionary):
         if document_dict["form_id"] == "10-Q" or document_dict["form_id"] == "10-K":
 
             # In the event the company isn't listed in the dataframe, a new row is added with the CIK no. and company name
-            if document_dict["cik_number"] not in set(ComFiles["CIK"]):
-                Com_row = pd.DataFrame(
+            if document_dict["cik_number"] not in set(com_files["CIK"]):
+                com_row = pd.DataFrame(
                     {
                         "Name": [document_dict["company_name"]],
                         "CIK": [document_dict["cik_number"]],
@@ -200,33 +200,33 @@ def retrieve_filings(master_dictionary):
                         "QDates": [[]],
                     }
                 )
-                ComFiles = pd.concat([ComFiles, Com_row])
+                com_files = pd.concat([com_files, com_row])
 
                 # Index reset each time a company is added to the dataframe
-                ComFiles = ComFiles.reset_index(drop=True)
+                com_files = com_files.reset_index(drop=True)
 
             # The 10Q or 10K document URLs are added to the company row along with the corresponding date
             if document_dict["form_id"] == "10-Q":
-                ComIndex = ComFiles.index[
-                    ComFiles["CIK"] == document_dict["cik_number"]
+                ComIndex = com_files.index[
+                    com_files["CIK"] == document_dict["cik_number"]
                 ].tolist()[0]
-                ComFiles.at[ComIndex, "10Qs"].append(
+                com_files.at[ComIndex, "10Qs"].append(
                     document_dict["file_url"]
                     .replace("-", "")
                     .replace(".txt", "/index.json")
                 )
-                ComFiles.at[ComIndex, "QDates"].append(document_dict["date"])
+                com_files.at[ComIndex, "QDates"].append(document_dict["date"])
             else:
                 print(document_dict["file_url"])
-                ComIndex = ComFiles.index[
-                    ComFiles["CIK"] == document_dict["cik_number"]
+                ComIndex = com_files.index[
+                    com_files["CIK"] == document_dict["cik_number"]
                 ].tolist()[0]
-                ComFiles.at[ComIndex, "10Ks"].append(
+                com_files.at[ComIndex, "10Ks"].append(
                     document_dict["file_url"]
                     .replace("-", "")
                     .replace(".txt", "/index.json")
                 )
-                ComFiles.at[ComIndex, "KDates"].append(document_dict["date"])
+                com_files.at[ComIndex, "KDates"].append(document_dict["date"])
 
             # The URL of each filing is adjusted for future indexing to be in the .json format
             document_dict["file_url"] = (
@@ -235,7 +235,7 @@ def retrieve_filings(master_dictionary):
                 .replace(".txt", "/index.json")
             )
             master_file_urls.append(document_dict)
-    return master_file_urls, ComFiles
+    return master_file_urls, com_files
 
 
 ######
@@ -300,18 +300,21 @@ def load_filing_names(filing_path):
 def parse_filings(
     filing_name,
     term_list,
-    ComFiles,
+    com_files,
     term_date,
     base_url,
     scraped_list,
     default_terms,
     headers,
 ):
-    print(len(ComFiles))
-    for company in range(0, len(ComFiles)):
+    print(len(com_files))
+    for company in range(0, len(com_files)):
         print("Company " + str(company))
         # Iterate through a companies 10Ks
-        for filing in ComFiles.at[company, filing_name]:
+
+        # TODO would this be an issue if there are multiple 10Ks?
+
+        for filing in com_files.at[company, filing_name]:
             print("Filing " + filing)
 
             # URL requested and json format retrieved
@@ -365,6 +368,7 @@ def parse_filings(
                     if report_dict["name_short"].lower() in [x.lower() for x in names]:
                         best_match_url.append(report_dict["url"])
 
+                # TODO isn't this section redundent? 'in' returns the first match
                 if len(best_match_url) > 1:
                     print("The URL check has found multiple potential matches\n")
                     print("Category Error: " + names[0])
@@ -377,6 +381,9 @@ def parse_filings(
                     statements_url.append(best_match_url)
                 else:
                     global x1
+
+                    # This section lists the key terms and attempts to identify the type of report it is based on the presence of key terms
+                    # TODO remove overlapping terms with income statement and stockholders' equity (eg Net Income)
                     x1 = default_terms[term_list.index(names)]
                     url_hold = best_fit_url(
                         master_reports, default_terms[term_list.index(names)]
@@ -469,7 +476,7 @@ def parse_filings(
             save_data(
                 filing_name,
                 statements_data,
-                ComFiles,
+                com_files,
                 term_date,
                 company,
                 filing,
@@ -479,7 +486,7 @@ def parse_filings(
 
 
 def save_data(
-    filing_name, statements_data, ComFiles, term_date, company, filing, headers
+    filing_name, statements_data, com_files, term_date, company, filing, headers
 ):
 
     for stat_num in range(0, len(statements_data)):
@@ -533,29 +540,29 @@ def save_data(
             #####################################################################
 
             if not os.path.exists(
-                data_directory + "\\" + ComFiles["Name"][company].replace("/", "")
+                data_directory + "\\" + com_files["Name"][company].replace("/", "")
             ):
                 os.makedirs(
-                    data_directory + "\\" + ComFiles["Name"][company].replace("/", "")
+                    data_directory + "\\" + com_files["Name"][company].replace("/", "")
                 )
 
             if not os.path.exists(
-                data_directory + "\\" + ComFiles["Name"][company].replace("/", "")
+                data_directory + "\\" + com_files["Name"][company].replace("/", "")
             ):
                 os.makedirs(
-                    data_directory + "\\" + ComFiles["Name"][company].replace("/", "")
+                    data_directory + "\\" + com_files["Name"][company].replace("/", "")
                 )
 
             # A file is created in each company's folder with a name structured: Filing type + Filing date + Table type
             new_file_dir = (
                 data_directory
                 + "\\"
-                + ComFiles["Name"][company].replace("/", "")
+                + com_files["Name"][company].replace("/", "")
                 + "\\"
                 + filing_name[0:3]
                 + "_"
-                + ComFiles.at[company, term_date][
-                    ComFiles.at[company, filing_name].index(filing)
+                + com_files.at[company, term_date][
+                    com_files.at[company, filing_name].index(filing)
                 ]
                 + "_"
                 + headers[stat_num]
@@ -589,7 +596,10 @@ def best_fit_url(master_reports, default_list):
 
         hold_term = 0
         while hold_term == 0:
+
             # Statement file content requested
+            # Hold term is added in because there is a strange error in BeautifulSoup which causes it to error out randomly
+            # This hold term ensures that if an error out occurs, the code will run again until it works
             try:
                 content1 = requests.get(statement["url"]).content
                 hold_term = 1
@@ -671,7 +681,9 @@ def best_fit_url(master_reports, default_list):
         if len(doc_df.columns) == len(doc_header[index_num:]):
             doc_df.columns = doc_header[index_num:]
 
-        # This loop is to convert the pandas index format into a list
+        # This loop is to convert the pandas index format (all the terms found in that report) into a list.
+        # The loop also cleans the list, ensuring that no punctuation is in the final list and all the terms are in lower case.
+
         category_hold = []
         for i in range(0, len(doc_df.index)):
             category_hold.append(doc_df.index[i])
@@ -680,6 +692,9 @@ def best_fit_url(master_reports, default_list):
         category_hold = [
             "".join(c for c in s if c not in string.punctuation) for s in category_hold
         ]
+
+        # TODO is this function the function that slows the program down? should minimise using it
+        # TODO maybe x = list_average(category_hold, default_list) then reference x throughout?
 
         match_values.append(list_average(category_hold, default_list))
         print(
@@ -716,6 +731,7 @@ def word2vec(word):
 
 
 def modified_word2vec(x):
+    # TODO why do you import it here, move to the top
     import collections
     import math
 
@@ -776,7 +792,7 @@ def main():
     global master_dictionary
     global year_links
     global filing_data
-    global ComFiles
+    global com_files
 
     # This is the base of the URL that will be used to look through the quarters
     base_url = r"https://www.sec.gov/Archives/edgar/daily-index"
@@ -795,11 +811,15 @@ def main():
     # The data is stored as a dataframe with the 10K and 10Qs, along with their respective filing dates, stored as lists
     filing_data = retrieve_filings(master_dictionary)
     master_file_urls = filing_data[0]
-    ComFiles = filing_data[1]
+    com_files = filing_data[1]
 
     base_url = r"https://www.sec.gov"
 
     input_filing_path = "U:/Day Files/Rodman, Ben/EAS/Quant/Filing Names"
+
+    # Retrieves the filing names and headers found in the files titled 'Default Filing Terms', 'Filing Document Names', 'Scraped Filing Document Names'
+    # stores them in a variable titled 'Lists'
+
     Lists = load_filing_names(input_filing_path)
 
     terms_list = Lists[0]
@@ -810,7 +830,7 @@ def main():
     scraped_list = parse_filings(
         "10Ks",
         terms_list,
-        ComFiles,
+        com_files,
         "KDates",
         base_url,
         scraped_list,
@@ -820,7 +840,7 @@ def main():
     scraped_list = parse_filings(
         "10Qs",
         terms_list,
-        ComFiles,
+        com_files,
         "QDates",
         base_url,
         scraped_list,
