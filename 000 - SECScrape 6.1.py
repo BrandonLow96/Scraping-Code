@@ -18,6 +18,7 @@ import os
 import re
 import string
 import urllib
+import collections
 
 import pandas as pd
 import requests
@@ -32,7 +33,7 @@ from bs4 import BeautifulSoup
 doc_check = []
 
 # Directory into which data will be saved and manipulated
-data_directory = "U:\Day Files\Rodman, Ben\EAS\Quant\CompanyData"
+data_directory = os.getcwd() + "\\" + "Data Directory"
 
 
 # Functions initiaised for use in the main function
@@ -113,6 +114,7 @@ def get_master_files(year_links):
         ###########################
 
         # Data saved to reduce RAM requirements and increase code speed
+
         with open(file_name, "wb") as f:
             f.write(content)
 
@@ -312,7 +314,9 @@ def parse_filings(
         print("Company " + str(company))
         # Iterate through a companies 10Ks
 
-        # TODO would this be an issue if there are multiple 10Ks?
+        # index to restart code if errors out
+        if company < 3035:
+            continue
 
         for filing in com_files.at[company, filing_name]:
             print("Filing " + filing)
@@ -360,57 +364,28 @@ def parse_filings(
             # List to hold URLs initialsed
             statements_url = []
 
-            for names in term_list:
+            for names in headers:
                 best_match_url = []
-                print(names)
+                # print(names)
                 for report_dict in master_reports:
-                    # if the short name can be found in the report list.
-                    if report_dict["name_short"].lower() in [x.lower() for x in names]:
-                        best_match_url.append(report_dict["url"])
-
-                # TODO isn't this section redundent? 'in' returns the first match
-                if len(best_match_url) > 1:
-                    print("The URL check has found multiple potential matches\n")
-                    print("Category Error: " + names[0])
-                    user_best_hold = input(
-                        "\nWhich URL in the list is the correct category (please enter the url as an answer): \n"
-                        + best_match_url
-                    )
-                    best_match_url = user_best_hold
-                elif len(best_match_url) == 1:
-                    statements_url.append(best_match_url)
-                else:
-                    global x1
 
                     # This section lists the key terms and attempts to identify the type of report it is based on the presence of key terms
-                    # TODO remove overlapping terms with income statement and stockholders' equity (eg Net Income)
-                    x1 = default_terms[term_list.index(names)]
+
+                    x1 = default_terms[headers.index(names)]
                     url_hold = best_fit_url(
-                        master_reports, default_terms[term_list.index(names)]
+                        master_reports, default_terms[headers.index(names)]
                     )
 
                     if url_hold == "No match found":
                         statements_url.append(url_hold)
+                        break
                     else:
-                        print("URL hold")
+                        print("Best fit algorithm found match for " + str(names))
                         statements_url.append(url_hold["url"])
-                        print("Checkpoint 1")
-                        master_index = next(
-                            (
-                                index
-                                for (index, d) in enumerate(master_reports)
-                                if d["url"] == url_hold["url"]
-                            ),
-                            None,
-                        )
-                        print("Checkpoint 2")
-                        scraped_list[term_list.index(names)].append(
-                            master_reports[master_index]["name_short"]
-                        )
-                        print("Checkpoint 3")
+                        break
 
-                print(statements_url)
-                # statements_url.append(best_match_url[0])
+            print(statements_url)
+            # statements_url.append(best_match_url[0])
 
             ########################
 
@@ -473,6 +448,8 @@ def parse_filings(
                     statements_data.append(statement)
 
                 # Data saved in common file
+
+            print("saving data")
             save_data(
                 filing_name,
                 statements_data,
@@ -546,13 +523,6 @@ def save_data(
                     data_directory + "\\" + com_files["Name"][company].replace("/", "")
                 )
 
-            if not os.path.exists(
-                data_directory + "\\" + com_files["Name"][company].replace("/", "")
-            ):
-                os.makedirs(
-                    data_directory + "\\" + com_files["Name"][company].replace("/", "")
-                )
-
             # A file is created in each company's folder with a name structured: Filing type + Filing date + Table type
             new_file_dir = (
                 data_directory
@@ -567,8 +537,10 @@ def save_data(
                 + "_"
                 + headers[stat_num]
             )
+            print("This is the new_file_dir: " + new_file_dir)
             if not os.path.exists(new_file_dir):
                 doc_df.to_csv(new_file_dir)
+                print("data saved")
 
 
 def best_fit_url(master_reports, default_list):
@@ -579,14 +551,14 @@ def best_fit_url(master_reports, default_list):
 
     global category_hold
 
-    print("These are the master reports")
-    print(master_reports)
-    print(len(master_reports))
+    # print("These are the master reports")
+    # print(master_reports)
+    # print(len(master_reports))
 
     # Loop through each statement url
     for statement in master_reports:
-        print("This is the statement")
-        print(statement)
+        # print("This is the statement")
+        # print(statement)
 
         # A dictionary is defined that will store the different parts of the statement
         statement_data = {}
@@ -615,58 +587,64 @@ def best_fit_url(master_reports, default_list):
                 hold_term = 0
 
         # All rows found and parsed
-        for index, row in enumerate(report_soup.table.find_all("tr")):
+        try:
+            for index, row in enumerate(report_soup.table.find_all("tr")):
 
-            cols = row.find_all("td")
+                cols = row.find_all("td")
 
-            # Statement for a regular row and not section or table header
-            if len(row.find_all("th")) == 0 and len(row.find_all("strong")) == 0:
-                reg_row = [ele.text.strip() for ele in cols]
-                statement_data["data"].append(reg_row)
+                # Statement for a regular row and not section or table header
+                if len(row.find_all("th")) == 0 and len(row.find_all("strong")) == 0:
+                    reg_row = [ele.text.strip() for ele in cols]
+                    statement_data["data"].append(reg_row)
 
-            # Statement for a regular row and a section but not a table header
-            elif len(row.find_all("th")) == 0 and len(row.find_all("strong")) != 0:
-                sec_row = cols[0].text.strip()
-                statement_data["sections"].append(sec_row)
+                # Statement for a regular row and a section but not a table header
+                elif len(row.find_all("th")) == 0 and len(row.find_all("strong")) != 0:
+                    sec_row = cols[0].text.strip()
+                    statement_data["sections"].append(sec_row)
 
-            # Statement if none of the above are recognised, therefore it's a table header
-            elif len(row.find_all("th")) != 0:
-                hed_row = [ele.text.strip() for ele in row.find_all("th")]
-                statement_data["headers"].append(hed_row)
+                # Statement if none of the above are recognised, therefore it's a table header
+                elif len(row.find_all("th")) != 0:
+                    hed_row = [ele.text.strip() for ele in row.find_all("th")]
+                    statement_data["headers"].append(hed_row)
 
+                else:
+                    print("We encountered an error.")
+
+            # Grab the proper components
+
+            if len(statement_data["headers"]) == 1:
+                index_num = 1
+            elif len(statement_data["headers"]) == 2:
+                index_num = 0
             else:
-                print("We encountered an error.")
+                print(
+                    "The header array length is an unusual shape. Please investigate \n"
+                )
+                input(
+                    "The code has been paused. Please end the code now and investigate"
+                )
 
-        # Grab the proper components
+            doc_header = statement_data["headers"][(len(statement_data["headers"]) - 1)]
+            doc_data = statement_data["data"]
 
-        if len(statement_data["headers"]) == 1:
-            index_num = 1
-        elif len(statement_data["headers"]) == 2:
-            index_num = 0
-        else:
-            print("The header array length is an unusual shape. Please investigate \n")
-            input("The code has been paused. Please end the code now and investigate")
+            # Data is converted into a dataframe
+            doc_df = pd.DataFrame(doc_data)
 
-        doc_header = statement_data["headers"][(len(statement_data["headers"]) - 1)]
-        doc_data = statement_data["data"]
+            # Define the Index column, rename it, and we need to make sure to drop the old column once we reindex.
+            doc_df.index = doc_df[0]
+            doc_df.index.name = "Category"
+            doc_df = doc_df.drop(0, axis=1)
 
-        # Data is converted into a dataframe
-        doc_df = pd.DataFrame(doc_data)
-
-        # Define the Index column, rename it, and we need to make sure to drop the old column once we reindex.
-        doc_df.index = doc_df[0]
-        doc_df.index.name = "Category"
-        doc_df = doc_df.drop(0, axis=1)
-
-        # Get rid of the '$', '(', ')', and convert the '' to NaNs.
-        doc_df = (
-            doc_df.replace("[\$,)%]", "", regex=True)
-            .replace("[(]", "-", regex=True)
-            .replace("", "NaN", regex=True)
-            .replace("\[", "", regex=True)
-            .replace("\]", "", regex=True)
-        )
-
+            # Get rid of the '$', '(', ')', and convert the '' to NaNs.
+            doc_df = (
+                doc_df.replace("[\$,)%]", "", regex=True)
+                .replace("[(]", "-", regex=True)
+                .replace("", "NaN", regex=True)
+                .replace("\[", "", regex=True)
+                .replace("\]", "", regex=True)
+            )
+        except:
+            print("We have encountered an error while looking for 'tr' in code")
         # Strings are converted into floats
         # If there is an error, the document check is skipped
 
@@ -675,7 +653,7 @@ def best_fit_url(master_reports, default_list):
             exception = 0
         except:
             exception = 1
-            print("Exception")
+            # print("Exception")
 
         # Column header names inserted
         if len(doc_df.columns) == len(doc_header[index_num:]):
@@ -695,18 +673,25 @@ def best_fit_url(master_reports, default_list):
 
         # TODO is this function the function that slows the program down? should minimise using it
         # TODO maybe x = list_average(category_hold, default_list) then reference x throughout?
+        list_average_calc = list_average(category_hold, default_list)
+        match_values.append(list_average_calc)
+        # print(
+        #    "Exception was: "
+        #    + str(exception)
+        #    + "\nValue was: "
+        #    + str(list_average_calc)
+        # )
 
-        match_values.append(list_average(category_hold, default_list))
-        print(
-            "Exception was: "
-            + str(exception)
-            + "\nValue was: "
-            + str(list_average(category_hold, default_list))
-        )
+        # This new sections returns the first match that meets the threshold of > 2
+        if list_average_calc > 2:
+            print(list_average_calc)
+            output = master_reports[match_values.index(list_average_calc)]
+            return output
 
-    print("Values for each master report given: ")
-    print(default_list[0])
-    print(match_values)
+    # print("Values for each master report given: ")
+    # print(default_list[0])
+    # print(match_values)
+
     if sum(match_values) == 0 or max(match_values) < 2:
         output = "No match found"
     else:
@@ -715,25 +700,23 @@ def best_fit_url(master_reports, default_list):
     return output
 
 
-def word2vec(word):
-    from collections import Counter
-    from math import sqrt
+# def word2vec(word):
+#     from collections import Counter
+#     from math import sqrt
 
-    # count the characters in word
-    cw = Counter(word)
-    # precomputes a set of the different characters
-    sw = set(cw)
-    # precomputes the "length" of the word vector
-    lw = sqrt(sum(c * c for c in cw.values()))
+#     # count the characters in word
+#     cw = Counter(word)
+#     # precomputes a set of the different characters
+#     sw = set(cw)
+#     # precomputes the "length" of the word vector
+#     lw = sqrt(sum(c * c for c in cw.values()))
 
-    # return a tuple
-    return cw, sw, lw
+#     # return a tuple
+#     return cw, sw, lw
 
 
 def modified_word2vec(x):
     # TODO why do you import it here, move to the top
-    import collections
-    import math
 
     hold_count = []
     for i in range(0, len(x) - 1):
@@ -763,8 +746,8 @@ def list_average(list_A, list_B):
     list_B = [x for x in list_B if len(x) > 1]
     global key
     global word
-    print(list_A)
-    print(list_B)
+    # print(list_A)
+    # print(list_B)
 
     for key in list_A:
         for word in list_B:
@@ -815,7 +798,7 @@ def main():
 
     base_url = r"https://www.sec.gov"
 
-    input_filing_path = "U:/Day Files/Rodman, Ben/EAS/Quant/Filing Names"
+    input_filing_path = os.getcwd() + "\\" + "Filing Names"
 
     # Retrieves the filing names and headers found in the files titled 'Default Filing Terms', 'Filing Document Names', 'Scraped Filing Document Names'
     # stores them in a variable titled 'Lists'
@@ -837,16 +820,16 @@ def main():
         default_terms,
         headers,
     )
-    scraped_list = parse_filings(
-        "10Qs",
-        terms_list,
-        com_files,
-        "QDates",
-        base_url,
-        scraped_list,
-        default_terms,
-        headers,
-    )
+    # scraped_list = parse_filings(
+    #     "10Qs",
+    #     terms_list,
+    #     com_files,
+    #     "QDates",
+    #     base_url,
+    #     scraped_list,
+    #     default_terms,
+    #     headers,
+    # )
 
     df = pd.DataFrame(scraped_list).transpose()
     df.columns = headers
