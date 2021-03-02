@@ -24,6 +24,7 @@ import pandas as pd
 import requests
 import xlsxwriter
 from bs4 import BeautifulSoup
+import numpy as np
 
 ##########
 
@@ -178,11 +179,18 @@ def get_master_files(year_links):
 
 
 def retrieve_filings(master_dictionary):
-    master_file_urls = []
 
     # Initialise the master dataframe
     com_files = pd.DataFrame(
-        {"Name": [], "CIK": [], "10Ks": [], "KDates": [], "10Qs": [], "QDates": []}
+        {
+            "Name": [],
+            "CIK": [],
+            "10Ks": [],
+            "KDates": [],
+            "10Qs": [],
+            "QDates": [],
+            "SIC": [],
+        }
     )
 
     for document_dict in master_dictionary:
@@ -200,6 +208,7 @@ def retrieve_filings(master_dictionary):
                         "KDates": [[]],
                         "10Qs": [[]],
                         "QDates": [[]],
+                        "SIC": [[]],
                     }
                 )
                 com_files = pd.concat([com_files, com_row])
@@ -218,6 +227,33 @@ def retrieve_filings(master_dictionary):
                     .replace(".txt", "/index.json")
                 )
                 com_files.at[ComIndex, "QDates"].append(document_dict["date"])
+
+                if len(com_files.at[ComIndex, "SIC"]) == 0:
+
+                    # This gets the SIC webpage
+                    sic_url = document_dict["file_url"].replace(".txt", "")
+                    sic_url1 = sic_url.split("/")
+                    sic_url = (
+                        sic_url.replace("-", "")
+                        + "/"
+                        + sic_url1[-1]
+                        + "-index-headers.html"
+                    )
+
+                    sic_webpage = requests.get(sic_url).content
+                    soup = BeautifulSoup(sic_webpage).get_text()
+
+                    try:
+                        match = re.findall(
+                            "(?<=STANDARD INDUSTRIAL CLASSIFICATION:\t)[^\n]*", soup
+                        )
+                        sic_number = re.findall("[\d]+", match[0])
+                        sic_number = sic_number[0]
+                        com_files.at[ComIndex, "SIC"].append(sic_number)
+
+                    except:
+                        com_files.at[ComIndex, "SIC"].append("")
+
             else:
                 print(document_dict["file_url"])
                 ComIndex = com_files.index[
@@ -230,14 +266,42 @@ def retrieve_filings(master_dictionary):
                 )
                 com_files.at[ComIndex, "KDates"].append(document_dict["date"])
 
+                if len(com_files.at[ComIndex, "SIC"]) == 0:
+
+                    # This gets the SIC webpage
+                    sic_url = document_dict["file_url"].replace(".txt", "")
+                    sic_url1 = sic_url.split("/")
+                    sic_url = (
+                        sic_url.replace("-", "")
+                        + "/"
+                        + sic_url1[-1]
+                        + "-index-headers.html"
+                    )
+
+                    sic_webpage = requests.get(sic_url).content
+                    soup = BeautifulSoup(sic_webpage).get_text()
+
+                    # This gets the SIC number and appends it to com_files
+                    try:
+                        match = re.findall(
+                            "(?<=STANDARD INDUSTRIAL CLASSIFICATION:\t)[^\n]*", soup
+                        )
+                        sic_number = re.findall("[\d]+", match[0])
+                        sic_number = sic_number[0]
+                        com_files.at[ComIndex, "SIC"].append(sic_number)
+
+                    except:
+                        com_files.at[ComIndex, "SIC"].append("")
+
             # The URL of each filing is adjusted for future indexing to be in the .json format
             document_dict["file_url"] = (
                 document_dict["file_url"]
                 .replace("-", "")
                 .replace(".txt", "/index.json")
             )
-            master_file_urls.append(document_dict)
-    return master_file_urls, com_files
+
+    com_files.to_csv(f"com_files_{year}.csv", index=False)
+    return com_files
 
 
 ######
@@ -315,7 +379,7 @@ def parse_filings(
         # Iterate through a companies 10Ks
 
         # index to restart code if errors out
-        if company < 3035:
+        if company < 381:
             continue
 
         for filing in com_files.at[company, filing_name]:
@@ -472,15 +536,8 @@ def save_data(
 
             if len(statements_data[stat_num]["headers"]) == 1:
                 index_num = 1
-            elif len(statements_data[stat_num]["headers"]) == 2:
-                index_num = 0
             else:
-                print(
-                    "The header array length is an unusual shape. Please investigate \n"
-                )
-                input(
-                    "The code has been paused. Please end the code now and investigate"
-                )
+                index_num = 0
 
             doc_header = statements_data[stat_num]["headers"][
                 (len(statements_data[stat_num]["headers"]) - 1)
@@ -534,6 +591,10 @@ def save_data(
                 + com_files.at[company, term_date][
                     com_files.at[company, filing_name].index(filing)
                 ]
+                + "_"
+                + str(com_files.at[company, "CIK"])
+                + "_"
+                + str(com_files.at[company, "SIC"][0])
                 + "_"
                 + headers[stat_num]
             )
@@ -617,12 +678,7 @@ def best_fit_url(master_reports, default_list):
             elif len(statement_data["headers"]) == 2:
                 index_num = 0
             else:
-                print(
-                    "The header array length is an unusual shape. Please investigate \n"
-                )
-                input(
-                    "The code has been paused. Please end the code now and investigate"
-                )
+                pass
 
             doc_header = statement_data["headers"][(len(statement_data["headers"]) - 1)]
             doc_data = statement_data["data"]
@@ -782,19 +838,31 @@ def main():
     # Year being searched for filings
     year = "2018"
 
-    # The SEC daily index files are requested through the SEC master data navigator
-    year_links = get_year_links(year, base_url)
+    # See if data is already gathered, else gather data
+    try:
+        com_files = pd.read_csv(
+            f"com_files_{year}.csv",
+            converters={
+                "10Ks": lambda x: eval(x),
+                "KDates": lambda x: eval(x),
+                "10Qs": lambda x: eval(x),
+                "QDates": lambda x: eval(x),
+                "SIC": lambda x: eval(x),
+            },
+        )
 
-    # Find 'master' files for each year. SEC provides three types of .idx files, sorted by 'Company', 'form types' and 'CIK number'.
-    # The 'master file for each year sorts by CIK number and is the only file which has any sort of delimiter, allowing us to parse it.
-    # A single variable of master_dictionary is created, which is a dictionary of every filing for each company for a year
-    master_dictionary = get_master_files(year_links)
+    except:
+        # The SEC daily index files are requested through the SEC master data navigator
+        year_links = get_year_links(year, base_url)
 
-    # Retrieves the 10-K and 10-Q URLs along with the associated company names and CIK codes
-    # The data is stored as a dataframe with the 10K and 10Qs, along with their respective filing dates, stored as lists
-    filing_data = retrieve_filings(master_dictionary)
-    master_file_urls = filing_data[0]
-    com_files = filing_data[1]
+        # Find 'master' files for each year. SEC provides three types of .idx files, sorted by 'Company', 'form types' and 'CIK number'.
+        # The 'master file for each year sorts by CIK number and is the only file which has any sort of delimiter, allowing us to parse it.
+        # A single variable of master_dictionary is created, which is a dictionary of every filing for each company for a year
+        master_dictionary = get_master_files(year_links)
+
+        # Retrieves the 10-K and 10-Q URLs along with the associated company names and CIK codes
+        # The data is stored as a dataframe with the 10K and 10Qs, along with their respective filing dates, stored as lists
+        com_files = retrieve_filings(master_dictionary)
 
     base_url = r"https://www.sec.gov"
 
