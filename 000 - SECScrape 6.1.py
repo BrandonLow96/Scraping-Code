@@ -40,6 +40,81 @@ data_directory = os.getcwd() + "\\" + "Data Directory"
 # Functions initiaised for use in the main function
 print("Initialising functions")
 
+
+def main():
+    print("Main Program Initialised")
+
+    # This is the base of the URL that will be used to look through the quarters
+    base_url = r"https://www.sec.gov/Archives/edgar/daily-index"
+    # Year being searched for filings
+    year = "2020"
+
+    # See if data is already gathered, else gather data
+    try:
+        com_files = pd.read_csv(
+            f"com_files_{year}.csv",
+            converters={
+                "10Ks": lambda x: eval(x),
+                "KDates": lambda x: eval(x),
+                "10Qs": lambda x: eval(x),
+                "QDates": lambda x: eval(x),
+                "SIC": lambda x: eval(x),
+            },
+        )
+
+    except:
+        # The SEC daily index files are requested through the SEC master data navigator
+        year_links = get_year_links(year, base_url)
+
+        # Find 'master' files for each year. SEC provides three types of .idx files, sorted by 'Company', 'form types' and 'CIK number'.
+        # The 'master file for each year sorts by CIK number and is the only file which has any sort of delimiter, allowing us to parse it.
+        # A single variable of master_dictionary is created, which is a dictionary of every filing for each company for a year
+        master_dictionary = get_master_files(year_links, year)
+
+        # Retrieves the 10-K and 10-Q URLs along with the associated company names and CIK codes
+        # The data is stored as a dataframe with the 10K and 10Qs, along with their respective filing dates, stored as lists
+        com_files = retrieve_filings(master_dictionary, year)
+
+    base_url = r"https://www.sec.gov"
+
+    input_filing_path = os.getcwd() + "\\" + "Filing Names"
+
+    # Retrieves the filing names and headers found in the files titled 'Default Filing Terms', 'Filing Document Names', 'Scraped Filing Document Names'
+    # stores them in a variable titled 'Lists'
+
+    Lists = load_filing_names(input_filing_path)
+
+    terms_list = Lists[0]
+    scraped_list = Lists[1]
+    headers = Lists[2]
+    default_terms = Lists[3]
+
+    scraped_list = parse_filings(
+        "10Ks",
+        terms_list,
+        com_files,
+        "KDates",
+        base_url,
+        scraped_list,
+        default_terms,
+        headers,
+    )
+    # scraped_list = parse_filings(
+    #     "10Qs",
+    #     terms_list,
+    #     com_files,
+    #     "QDates",
+    #     base_url,
+    #     scraped_list,
+    #     default_terms,
+    #     headers,
+    # )
+
+    df = pd.DataFrame(scraped_list).transpose()
+    df.columns = headers
+    df.to_excel(input_filing_path + r"\Scraped Filing Document Names.xlsx")
+
+
 # Function creating SEC URL from base URL defined
 def make_url(base_url, comp):
     url = base_url
@@ -91,7 +166,14 @@ def get_year_links(year, base_url):
 ######
 
 
-def get_master_files(year_links):
+def get_master_files(year_links, year):
+
+    # Creates a directory to hold the master files
+
+    master_file_path = "master_files" + "_" + year
+
+    if not os.path.exists(master_file_path):
+        os.makedirs(master_file_path)
 
     # Links to master files found for each year
     matching = [link for link in year_links if "master" in link]
@@ -111,19 +193,19 @@ def get_master_files(year_links):
         file_name = result.group(1)
 
         ###########################
-        # This section saves a copy of the master file in a more accesible format
+        # This section saves a copy of the master file in a more accesible format and in a document
         ###########################
 
         # Data saved to reduce RAM requirements and increase code speed
 
-        with open(file_name, "wb") as f:
+        with open(f"{master_file_path}\\{file_name}", "wb") as f:
             f.write(content)
 
-        with open(file_name, "rb") as f:
+        with open(f"{master_file_path}\\{file_name}", "rb") as f:
             byte_data = f.read()
 
         # Byte steam decoded, split by '--' which is the header and the rest of the data (the useful data)
-        data = byte_data.decode("utf-8").split("--")
+        data = byte_data.decode("utf-8", "ignore").split("--")
 
         data_format = data[-1]
 
@@ -178,7 +260,7 @@ def get_master_files(year_links):
 ######
 
 
-def retrieve_filings(master_dictionary):
+def retrieve_filings(master_dictionary, year):
 
     # Initialise the master dataframe
     com_files = pd.DataFrame(
@@ -379,7 +461,7 @@ def parse_filings(
         # Iterate through a companies 10Ks
 
         # index to restart code if errors out
-        if company < 381:
+        if company < 2861:
             continue
 
         for filing in com_files.at[company, filing_name]:
@@ -387,6 +469,8 @@ def parse_filings(
 
             # URL requested and json format retrieved
             content = requests.get(filing).json()
+
+            xml_summary = ""
 
             for file in content["directory"]["item"]:
 
@@ -399,8 +483,15 @@ def parse_filings(
 
             base_url_hold = xml_summary.replace("FilingSummary.xml", "")
 
-            # Content requested
-            content = requests.get(xml_summary).content
+            try:
+
+                # Content requested
+                content = requests.get(xml_summary).content
+
+            except:
+                print(f"{filing} does not contain a FilingSummary.xml page.")
+                continue
+
             # Content parsed
             soup = BeautifulSoup(content, "lxml")
 
@@ -572,19 +663,27 @@ def save_data(
             doc_df.columns = doc_header[index_num:]
 
             #####################################################################
+            # Regular expression removes special characters from company name. This helps if the company name contains a "\\" which may break code.
+            # Some special characters are also not permitted in folder names.
 
             if not os.path.exists(
-                data_directory + "\\" + com_files["Name"][company].replace("/", "")
+                data_directory
+                + "\\"
+                + re.sub("[^a-zA-Z0-9 \n\.]", "", com_files["Name"][company]).strip()
             ):
                 os.makedirs(
-                    data_directory + "\\" + com_files["Name"][company].replace("/", "")
+                    data_directory
+                    + "\\"
+                    + re.sub(
+                        "[^a-zA-Z0-9 \n\.]", "", com_files["Name"][company]
+                    ).strip()
                 )
 
             # A file is created in each company's folder with a name structured: Filing type + Filing date + Table type
             new_file_dir = (
                 data_directory
                 + "\\"
-                + com_files["Name"][company].replace("/", "")
+                + re.sub("[^a-zA-Z0-9 \n\.]", "", com_files["Name"][company]).strip()
                 + "\\"
                 + filing_name[0:3]
                 + "_"
@@ -609,8 +708,6 @@ def best_fit_url(master_reports, default_list):
     print("Best fit algorithm initiated")
     # Hold values initialised
     match_values = []
-
-    global category_hold
 
     # print("These are the master reports")
     # print(master_reports)
@@ -800,10 +897,6 @@ def list_average(list_A, list_B):
     list_B = [x for x in list_B if x != ""]
     list_A = [x for x in list_A if len(x) > 1]
     list_B = [x for x in list_B if len(x) > 1]
-    global key
-    global word
-    # print(list_A)
-    # print(list_B)
 
     for key in list_A:
         for word in list_B:
@@ -817,91 +910,6 @@ def list_average(list_A, list_B):
                 pass
 
     return cumulative_res
-
-
-def main():
-    print("Main Program Initialised")
-
-    global base_url
-    global year
-    global terms_list
-    global scraped_list
-    global headers
-    global default_terms
-    global master_dictionary
-    global year_links
-    global filing_data
-    global com_files
-
-    # This is the base of the URL that will be used to look through the quarters
-    base_url = r"https://www.sec.gov/Archives/edgar/daily-index"
-    # Year being searched for filings
-    year = "2018"
-
-    # See if data is already gathered, else gather data
-    try:
-        com_files = pd.read_csv(
-            f"com_files_{year}.csv",
-            converters={
-                "10Ks": lambda x: eval(x),
-                "KDates": lambda x: eval(x),
-                "10Qs": lambda x: eval(x),
-                "QDates": lambda x: eval(x),
-                "SIC": lambda x: eval(x),
-            },
-        )
-
-    except:
-        # The SEC daily index files are requested through the SEC master data navigator
-        year_links = get_year_links(year, base_url)
-
-        # Find 'master' files for each year. SEC provides three types of .idx files, sorted by 'Company', 'form types' and 'CIK number'.
-        # The 'master file for each year sorts by CIK number and is the only file which has any sort of delimiter, allowing us to parse it.
-        # A single variable of master_dictionary is created, which is a dictionary of every filing for each company for a year
-        master_dictionary = get_master_files(year_links)
-
-        # Retrieves the 10-K and 10-Q URLs along with the associated company names and CIK codes
-        # The data is stored as a dataframe with the 10K and 10Qs, along with their respective filing dates, stored as lists
-        com_files = retrieve_filings(master_dictionary)
-
-    base_url = r"https://www.sec.gov"
-
-    input_filing_path = os.getcwd() + "\\" + "Filing Names"
-
-    # Retrieves the filing names and headers found in the files titled 'Default Filing Terms', 'Filing Document Names', 'Scraped Filing Document Names'
-    # stores them in a variable titled 'Lists'
-
-    Lists = load_filing_names(input_filing_path)
-
-    terms_list = Lists[0]
-    scraped_list = Lists[1]
-    headers = Lists[2]
-    default_terms = Lists[3]
-
-    scraped_list = parse_filings(
-        "10Ks",
-        terms_list,
-        com_files,
-        "KDates",
-        base_url,
-        scraped_list,
-        default_terms,
-        headers,
-    )
-    # scraped_list = parse_filings(
-    #     "10Qs",
-    #     terms_list,
-    #     com_files,
-    #     "QDates",
-    #     base_url,
-    #     scraped_list,
-    #     default_terms,
-    #     headers,
-    # )
-
-    df = pd.DataFrame(scraped_list).transpose()
-    df.columns = headers
-    df.to_excel(input_filing_path + r"\Scraped Filing Document Names.xlsx")
 
 
 if __name__ == "__main__":

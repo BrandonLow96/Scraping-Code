@@ -4,8 +4,17 @@ Web Scraping the SEC, Part 2, Scraping the daily index.ipynb
 Web Scraping the SEC, Part 3, Parsing individual company reports.ipynb
 testing_main_file.ipynd.ipynb
 Data Directory
+com_files_2017.csv
 com_files_2018.csv
+com_files_2019.csv
+com_files_2020.csv
 Error to solve - list of companies with slash in name .xlsx
 Data Directory (old 21.02.27)
 Data Directory (old 21.03.01)
 daily_index_2018
+Data_Directory_2019
+Data_Directory_2018
+master_files_2017
+master_files_2018
+master_files_2019
+master_files_2020
