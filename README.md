@@ -27,24 +27,11 @@
 <!-- PROJECT LOGO -->
 <br />
 <p align="center">
-  <a href="https://github.com/othneildrew/Best-README-Template">
-    <img src="images/logo.png" alt="Logo" width="80" height="80">
+  <a href="https://github.com/BrandonLow96/Scraping-Code">
   </a>
 
-  <h3 align="center">Best-README-Template</h3>
+  <h3 align="center">SEC Scraping Code</h3>
 
-  <p align="center">
-    An awesome README template to jumpstart your projects!
-    <br />
-    <a href="https://github.com/othneildrew/Best-README-Template"><strong>Explore the docs »</strong></a>
-    <br />
-    <br />
-    <a href="https://github.com/othneildrew/Best-README-Template">View Demo</a>
-    ·
-    <a href="https://github.com/othneildrew/Best-README-Template/issues">Report Bug</a>
-    ·
-    <a href="https://github.com/othneildrew/Best-README-Template/issues">Request Feature</a>
-  </p>
 </p>
 
 
@@ -122,14 +109,19 @@ This is an example of how to list things you need to use the software and how to
 <!-- USAGE EXAMPLES -->
 ## Usage
 
+This is an example of a balance sheet that you can obtain with the code:
 
+
+Nike 2018 Balance Sheet
+
+![Image of Nike 2018 balance sheet](https://user-images.githubusercontent.com/78768156/113715132-0cb61680-96e1-11eb-9b69-7e763a6fd952.png)
 
 
 
 <!-- ROADMAP -->
 ## Roadmap
 
-See the [open issues](https://github.com/othneildrew/Best-README-Template/issues) for a list of proposed features (and known issues).
+See the [open issues](https://github.com/BrandonLow96/Scraping-Code/issues) for a list of proposed features (and known issues).
 
 
 
@@ -156,9 +148,9 @@ Distributed under the MIT License. See `LICENSE` for more information.
 <!-- CONTACT -->
 ## Contact
 
-Your Name - [@your_twitter](https://twitter.com/your_username) - email@example.com
+Brandon Low - low.brandon96@gmail.com
 
-Project Link: [https://github.com/your_username/repo_name](https://github.com/your_username/repo_name)
+Project Link: [https://github.com/BrandonLow96/Scraping-Code](https://github.com/BrandonLow96/Scraping-Code)
 
 
 
@@ -166,7 +158,7 @@ Project Link: [https://github.com/your_username/repo_name](https://github.com/yo
 ## Acknowledgements
 * [GitHub Emoji Cheat Sheet](https://www.webpagefx.com/tools/emoji-cheat-sheet)
 * [Img Shields](https://shields.io)
-* [Choose an Open Source License](https://choosealicense.com)
+* [Idea](https://www.youtube.com/watch?v=-7I7OAC6ih8&ab_channel=SigmaCoding)
 * [GitHub Pages](https://pages.github.com)
 * [Animate.css](https://daneden.github.io/animate.css)
 * [Loaders.css](https://connoratherton.com/loaders)
