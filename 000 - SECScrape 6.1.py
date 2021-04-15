@@ -19,12 +19,17 @@ import re
 import string
 import urllib
 import collections
+import time
 
 import pandas as pd
 import requests
 import xlsxwriter
 from bs4 import BeautifulSoup
 import numpy as np
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.114 Safari/537.36"
+}
 
 ##########
 
@@ -47,7 +52,7 @@ def main():
     # This is the base of the URL that will be used to look through the quarters
     base_url = r"https://www.sec.gov/Archives/edgar/daily-index"
     # Year being searched for filings
-    year = "2020"
+    year = "2019"
 
     # See if data is already gathered, else gather data
     try:
@@ -79,40 +84,33 @@ def main():
 
     input_filing_path = os.getcwd() + "\\" + "Filing Names"
 
-    # Retrieves the filing names and headers found in the files titled 'Default Filing Terms', 'Filing Document Names', 'Scraped Filing Document Names'
+    # Retrieves the filing names and headers found in the files titled 'Default Filing Terms', 'Filing Document Names'
     # stores them in a variable titled 'Lists'
 
     Lists = load_filing_names(input_filing_path)
 
     terms_list = Lists[0]
-    scraped_list = Lists[1]
-    headers = Lists[2]
-    default_terms = Lists[3]
+    headers = Lists[1]
+    default_terms = Lists[2]
 
-    scraped_list = parse_filings(
+    parse_filings(
         "10Ks",
         terms_list,
         com_files,
         "KDates",
         base_url,
-        scraped_list,
         default_terms,
         headers,
     )
-    # scraped_list = parse_filings(
+    # parse_filings(
     #     "10Qs",
     #     terms_list,
     #     com_files,
     #     "QDates",
     #     base_url,
-    #     scraped_list,
     #     default_terms,
     #     headers,
     # )
-
-    df = pd.DataFrame(scraped_list).transpose()
-    df.columns = headers
-    df.to_excel(input_filing_path + r"\Scraped Filing Document Names.xlsx")
 
 
 # Function creating SEC URL from base URL defined
@@ -136,7 +134,7 @@ def get_year_links(year, base_url):
     year_url = make_url(base_url, [year, "index.json"])
 
     # Requesting the content for ###YEAR VARIABLE###
-    content = requests.get(year_url)
+    content = requests.get(year_url, headers=HEADERS)
     decoded_content = content.json()
 
     year_links = []
@@ -147,7 +145,8 @@ def get_year_links(year, base_url):
         qtr_url = make_url(base_url, [year, item["name"], "index.json"])
 
         # New URL requested as json structure
-        file_content = requests.get(qtr_url)
+        file_content = requests.get(qtr_url, headers=HEADERS)
+        time.sleep(1.5)
         decoded_content = file_content.json()
 
         # For each file retrieved, the type and URL is stored
@@ -186,7 +185,8 @@ def get_master_files(year_links, year):
         print("This is the master file: " + str(master))
 
         file_url = master
-        content = requests.get(file_url).content
+        content = requests.get(file_url, headers=HEADERS).content
+        time.sleep(1.5)
 
         # Master file name created for each master file
         result = re.search("master.(.*).idx", file_url)
@@ -322,8 +322,9 @@ def retrieve_filings(master_dictionary, year):
                         + "-index-headers.html"
                     )
 
-                    sic_webpage = requests.get(sic_url).content
-                    soup = BeautifulSoup(sic_webpage).get_text()
+                    sic_webpage = requests.get(sic_url, headers=HEADERS).content
+                    time.sleep(1.5)
+                    soup = BeautifulSoup(sic_webpage, "html.parser").get_text()
 
                     try:
                         match = re.findall(
@@ -360,8 +361,9 @@ def retrieve_filings(master_dictionary, year):
                         + "-index-headers.html"
                     )
 
-                    sic_webpage = requests.get(sic_url).content
-                    soup = BeautifulSoup(sic_webpage).get_text()
+                    sic_webpage = requests.get(sic_url, headers=HEADERS).content
+                    time.sleep(1.5)
+                    soup = BeautifulSoup(sic_webpage, "html.parser").get_text()
 
                     # This gets the SIC number and appends it to com_files
                     try:
@@ -414,21 +416,6 @@ def load_filing_names(filing_path):
         for y in terms_list
     ]
 
-    # Scraped filing names retrieved, cleaned and sorted
-    Scraped_File_Doc_names = pd.read_excel(
-        filing_path + r"\Scraped Filing Document Names.xlsx", index_col=0
-    )
-
-    scraped_list = []
-    for i in headers:
-        scraped_list.append(Scraped_File_Doc_names[i].to_list())
-
-    scraped_list = [[x for x in y if str(x) != "nan"] for y in scraped_list]
-    scraped_list = [
-        ["".join(c.lower() for c in s if c not in string.punctuation) for s in y]
-        for y in scraped_list
-    ]
-
     # Default filing row names and keys
     Default_Doc_Terms = pd.read_excel(filing_path + r"\Default Filing Terms.xlsx")
 
@@ -442,7 +429,7 @@ def load_filing_names(filing_path):
         for y in default_terms
     ]
 
-    return terms_list, scraped_list, headers, default_terms
+    return terms_list, headers, default_terms
 
 
 def parse_filings(
@@ -451,7 +438,6 @@ def parse_filings(
     com_files,
     term_date,
     base_url,
-    scraped_list,
     default_terms,
     headers,
 ):
@@ -461,14 +447,20 @@ def parse_filings(
         # Iterate through a companies 10Ks
 
         # index to restart code if errors out
-        if company < 2861:
+        if company < 2237:
             continue
 
         for filing in com_files.at[company, filing_name]:
             print("Filing " + filing)
 
-            # URL requested and json format retrieved
-            content = requests.get(filing).json()
+            # URL requested and json format retrieved. Sometimes the .json fails for no reasons
+            content = None
+            while content is None:
+                try:
+                    # connect
+                    content = requests.get(filing, headers=HEADERS).json()
+                except ValueError:
+                    pass
 
             xml_summary = ""
 
@@ -484,9 +476,9 @@ def parse_filings(
             base_url_hold = xml_summary.replace("FilingSummary.xml", "")
 
             try:
-
                 # Content requested
-                content = requests.get(xml_summary).content
+                content = requests.get(xml_summary, headers=HEADERS).content
+                time.sleep(1.5)
 
             except:
                 print(f"{filing} does not contain a FilingSummary.xml page.")
@@ -556,6 +548,7 @@ def parse_filings(
 
             # Loop through each statement url
             for statement in statements_url:
+                time.sleep(1.5)
 
                 if statement != "No match found":
                     # A dictionary is defined that will store the different parts of the statement
@@ -565,8 +558,9 @@ def parse_filings(
                     statement_data["data"] = []
 
                     # Statement file content requested
-                    content = requests.get(statement).content
-                    report_soup = BeautifulSoup(content, "html")
+                    content = requests.get(statement, headers=HEADERS).content
+                    time.sleep(1.5)
+                    report_soup = BeautifulSoup(content, "html.parser")
 
                     # All rows found and parsed
                     for index, row in enumerate(report_soup.table.find_all("tr")):
@@ -614,7 +608,6 @@ def parse_filings(
                 filing,
                 headers,
             )
-    return scraped_list
 
 
 def save_data(
@@ -637,6 +630,10 @@ def save_data(
 
             # Data is converted into a dataframe
             doc_df = pd.DataFrame(doc_data)
+
+            # # Add a row with the units to the top row
+            df_unit = pd.DataFrame([statements_data[stat_num]["headers"][0][0]])
+            doc_df = pd.concat([df_unit, doc_df], ignore_index=True)
 
             # Define the Index column, rename it, and we need to make sure to drop the old column once we reindex.
             doc_df.index = doc_df[0]
@@ -731,7 +728,8 @@ def best_fit_url(master_reports, default_list):
             # Hold term is added in because there is a strange error in BeautifulSoup which causes it to error out randomly
             # This hold term ensures that if an error out occurs, the code will run again until it works
             try:
-                content1 = requests.get(statement["url"]).content
+                content1 = requests.get(statement["url"], headers=HEADERS).content
+                time.sleep(1.5)
                 hold_term = 1
             except:
                 hold_term = 0
@@ -739,7 +737,8 @@ def best_fit_url(master_reports, default_list):
         hold_term = 0
         while hold_term == 0:
             try:
-                report_soup = BeautifulSoup(content1, "html")
+                report_soup = BeautifulSoup(content1, "html.parser")
+                time.sleep(1.5)
                 hold_term = 1
             except:
                 hold_term = 0
